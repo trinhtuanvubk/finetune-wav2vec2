@@ -113,7 +113,7 @@ def main(rank, world_size, config, resume, preload):
 
     # Load pretrained model
     model = Wav2Vec2ForCTC.from_pretrained(
-        pretrained_path, 
+        PRETRAINED_PATH, 
         ctc_loss_reduction="mean", 
         pad_token_id=processor.tokenizer.pad_token_id,
         vocab_size=len(processor.tokenizer),
