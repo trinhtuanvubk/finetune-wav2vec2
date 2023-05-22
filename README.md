@@ -1,5 +1,9 @@
 ### Installation
 ```
+docker pull trinhtuanvubk/torch-w2v2:finetune
+docker run -itd --restart always --gpus all -v $PWD/:/w2v2-finetune/ --name w2v2 torch-w2v2:finetune
+docker exec -it w2v2 bash
+cd w2v2-finetune
 pip install -r requirements.txt
 ```
 
