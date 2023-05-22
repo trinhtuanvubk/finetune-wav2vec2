@@ -17,6 +17,8 @@ from utils.metric import Metric
 from dataloader.dataset import DefaultCollate
 from transformers import Wav2Vec2ForCTC, Wav2Vec2FeatureExtractor, Wav2Vec2CTCTokenizer, Wav2Vec2Processor
 
+PRETRAINED_PATH = "facebook/wav2vec2-base-960h"
+
 def setup(rank, world_size):
     os.environ['MASTER_ADDR'] = 'localhost'
     os.environ['MASTER_PORT'] = '4444'
@@ -70,16 +72,11 @@ def main(rank, world_size, config, resume, preload):
 
     train_base_ds = initialize_module(config["train_dataset"]["path"], args=config["train_dataset"]["args"])
     vocab_dict = train_base_ds.get_vocab_dict()
-    with open('vocab.json', 'w+') as f:
-        json.dump(vocab_dict, f)
-        f.close()
+    # with open('vocab.json', 'w+') as f:
+    #     json.dump(vocab_dict, f)
+    #     f.close()
     dist.barrier()
-    # Create processor
-    tokenizer = Wav2Vec2CTCTokenizer("vocab.json", 
-                                    **config["special_tokens"],
-                                    word_delimiter_token="|")
-    feature_extractor = Wav2Vec2FeatureExtractor.from_pretrained(pretrained_path)
-    processor = Wav2Vec2Processor(feature_extractor=feature_extractor, tokenizer=tokenizer)
+    processor = Wav2Vec2Processor.from_pretrained(PRETRAINED_PATH)
     default_collate = DefaultCollate(processor, config['meta']['sr'])
 
     # Create train dataloader
@@ -140,7 +137,6 @@ def main(rank, world_size, config, resume, preload):
         max_lr=config["scheduler"]["max_lr"], 
         epochs=epochs, 
         steps_per_epoch = steps_per_epoch)
-
 
     if rank == 0:
         print("Number of training utterances: ", len(train_ds))

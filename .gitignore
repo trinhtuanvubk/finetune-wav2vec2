@@ -7,3 +7,7 @@ models/
 *.gz
 *.tar
 *.out
+labelled/
+ljtest/
+timit/
+wav2vec2-base/
