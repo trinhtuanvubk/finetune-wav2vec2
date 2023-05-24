@@ -11,3 +11,4 @@ labelled/
 ljtest/
 timit/
 wav2vec2-base/
+*.pyc
