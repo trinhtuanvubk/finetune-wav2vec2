@@ -25,15 +25,15 @@ gzip -d 4gram_small.arpa.gz
 3. Run
     - Start training from scratch:
         ```
-        python train.py -c config.toml
+        python train.py --config config.toml
         ```
     - Resume:
         ```
-        python train.py -c config.toml -r
+        python train.py --config config.toml --resume
         ```
     - Load specific model and start training:
         ```
-        python train.py -c config.toml -p path/to/your/model.tar
+        python train.py --config config.toml --preload path/to/your/model.tar
         ```
 
 <a name = "inference" ></a>
@@ -45,17 +45,21 @@ usage: inference.py [-h] -f TEST_FILEPATH [-s HUGGINGFACE_FOLDER] [-m MODEL_PATH
 ASR INFERENCE ARGS
 
 optional arguments:
-  -h, --help            show this help message and exit
-  -f TEST_FILEPATH, --test_filepath TEST_FILEPATH
+  --help            show this help message and exit
+  --test_filepath TEST_FILEPATH
                         It can be either the path to your audio file (.wav, .mp3) or a text file (.txt) containing a list of audio file paths.
-  -s HUGGINGFACE_FOLDER, --huggingface_folder HUGGINGFACE_FOLDER
+  --huggingface_folder HUGGINGFACE_FOLDER
                         The folder where you stored the huggingface files. Check the <local_dir> argument of [huggingface.args] in config.toml. Default
                         value: "huggingface-hub".
-  -m MODEL_PATH, --model_path MODEL_PATH
+  --model_path MODEL_PATH
                         Path to the model (.tar file) in saved/<project_name>/checkpoints. If not provided, default uses the pytorch_model.bin in the
                         <HUGGINGFACE_FOLDER>
-  -d DEVICE_ID, --device_id DEVICE_ID
+  --model_path MODEL_PATH
+                        Path to the n-gram language model (.tar file)
+  --device_id DEVICE_ID
                         The device you want to test your model on if CUDA is available. Otherwise, CPU is used. Default value: 0
+  --use_language_model 
+                        Transcript with n-gram language model. Action: "store_true"
 ```
 
 Transcribe an audio file:
