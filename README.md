@@ -1,6 +1,6 @@
 # FINETUNE WAV2VEC2
 ### Installation
-```bash
+```
 docker build -t torch-w2v2:finetune .
 docker run -itd --restart always --gpus all -v $PWD/:/workspace/ --name w2v2 torch-w2v2:finetune
 docker exec -it w2v2 bash
