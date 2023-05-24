@@ -1,12 +1,17 @@
+# FINETUNE WAV2VEC2
 ### Installation
-```
-docker pull trinhtuanvubk/torch-w2v2:finetune
-docker run -itd --restart always --gpus all -v $PWD/:/w2v2-finetune/ --name w2v2 torch-w2v2:finetune
+```bash
+docker build -t torch-w2v2:finetune .
+docker run -itd --restart always --gpus all -v $PWD/:/workspace/ --name w2v2 torch-w2v2:finetune
 docker exec -it w2v2 bash
-cd w2v2-finetune
 pip install -r requirements.txt
 ```
-
+### Download n-gram language model 
+Go to: https://kaldi-asr.org/models/m5
+```bash
+wget https://kaldi-asr.org/models/5/4gram_small.arpa.gz
+gzip -d 4gram_small.arpa.gz
+```
 <a name = "train" ></a>
 ### Train
 1. Prepare your dataset
@@ -56,11 +61,13 @@ optional arguments:
 Transcribe an audio file:
 ```cmd
 python inference.py \
-    -f path/to/your/audio/file.wav(.mp3) \
-    -s huggingface-hub
+    --test_filepath ./path/to/your/audio/file.wav(.mp3) \
+    --model_path ./path/to/checkpoints/model.tar \
+    --language_model_path ./path/to/your/lm.arpa \
+    --use_language_model
 
 # output example:
->>> transcript: Hello World 
+>>> transcript_lm: Hello World 
 ```
 
 Transcribe a list of audio files. Check the input file [test.txt](examples/inference_data_examples/test.txt) and the output file [transcript_test.txt](examples/inference_data_examples/transcript_test.txt) (which will be stored in the same folder as the input file):
