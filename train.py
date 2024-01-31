@@ -1,3 +1,7 @@
+import os
+os.environ["CUDA_VISIBLE_DEVICES"] = "0" 
+os.environ["WORLD_SIZE"] = "1"
+
 import argparse
 import json
 import torch
@@ -7,6 +11,7 @@ import os
 import toml
 import warnings
 import datetime
+
 warnings.filterwarnings('ignore')
 
 from torch.nn.parallel import DistributedDataParallel as DDP
@@ -14,10 +19,10 @@ from torch.utils.data import DataLoader
 from time import gmtime, strftime
 from utils.utils import *
 from utils.metric import Metric
+from utils.wrap_lr_scheduler import Wrap_OneCycleLR
 from dataloader.dataset import DefaultCollate
 from transformers import Wav2Vec2ForCTC, Wav2Vec2FeatureExtractor, Wav2Vec2CTCTokenizer, Wav2Vec2Processor
 
-PRETRAINED_PATH = "facebook/wav2vec2-base-960h"
 
 def setup(rank, world_size):
     os.environ['MASTER_ADDR'] = 'localhost'
@@ -31,24 +36,24 @@ def cleanup():
 
 
 def main(rank, world_size, config, resume, preload):
-    os.environ['CUDA_VISIBLE_DEVICES']=config["meta"]["device_ids"]
+    os.environ['CUDA_VISIBLE_DEVICES'] = config["meta"]["device_ids"]
     os.environ['TORCH_DISTRIBUTED_DEBUG'] = 'INFO'
     setup(rank, world_size)
-
+    pretrained_path = config["meta"]["pretrained_path"]
     epochs = config["meta"]["epochs"]
     gradient_accumulation_steps = config["meta"]["gradient_accumulation_steps"]
     use_amp = config["meta"]["use_amp"]
     max_clip_grad_norm = config["meta"]["max_clip_grad_norm"]
-    save_dir =  os.path.join(config["meta"]["save_dir"], config["meta"]['name'] + '/checkpoints')
+    save_dir = os.path.join(config["meta"]["save_dir"], config["meta"]['name'] + '/checkpoints')
     log_dir = os.path.join(config["meta"]["save_dir"], config["meta"]['name'] + '/log_dir')
-    
+
     if rank == 0:
         # Creatr dirs
         if not os.path.exists(save_dir):
             os.makedirs(save_dir)
         if not os.path.exists(log_dir):
             os.makedirs(log_dir)
-            
+
         # Store config file
         config_name = strftime("%Y-%m-%d %H:%M:%S", gmtime()).replace(' ', '_') + '.toml'
         with open(os.path.join(config["meta"]["save_dir"], config["meta"]['name'] + '/' + config_name), 'w+') as f:
@@ -76,7 +81,7 @@ def main(rank, world_size, config, resume, preload):
     #     json.dump(vocab_dict, f)
     #     f.close()
     dist.barrier()
-    processor = Wav2Vec2Processor.from_pretrained(PRETRAINED_PATH)
+    processor = Wav2Vec2Processor.from_pretrained(pretrained_path)
     default_collate = DefaultCollate(processor, config['meta']['sr'])
 
     # Create train dataloader
@@ -90,7 +95,7 @@ def main(rank, world_size, config, resume, preload):
     train_dl = DataLoader(
         dataset=train_ds,
         **config["train_dataset"]["dataloader"],
-        sampler = train_sampler,
+        sampler=train_sampler,
         collate_fn=default_collate
     )
 
@@ -106,20 +111,19 @@ def main(rank, world_size, config, resume, preload):
     val_dl = DataLoader(
         dataset=val_ds,
         **config["val_dataset"]["dataloader"],
-        sampler = val_sampler,
+        sampler=val_sampler,
         collate_fn=default_collate
     )
 
-
     # Load pretrained model
     model = Wav2Vec2ForCTC.from_pretrained(
-        PRETRAINED_PATH, 
-        ctc_loss_reduction="mean", 
+        pretrained_path,
+        ctc_loss_reduction="mean",
         pad_token_id=processor.tokenizer.pad_token_id,
         vocab_size=len(processor.tokenizer),
         gradient_checkpointing=False
     )
-    
+
     # freeze the wav2vec feature encoder, if you have small dataset, this helps a lot
     model.freeze_feature_encoder()
     # DDP for multi-processing
@@ -128,15 +132,23 @@ def main(rank, world_size, config, resume, preload):
     # Set up metric, scheduler, optmizer
     compute_metric = Metric(processor)
     optimizer = torch.optim.AdamW(
-        params = model.parameters(),
-        lr = config["optimizer"]["lr"]
+        params=model.parameters(),
+        lr=config["optimizer"]["lr"]
     )
-    steps_per_epoch = (len(train_dl)//gradient_accumulation_steps) + (len(train_dl)%gradient_accumulation_steps != 0)
-    scheduler = torch.optim.lr_scheduler.OneCycleLR(
-        optimizer, 
-        max_lr=config["scheduler"]["max_lr"], 
-        epochs=epochs, 
-        steps_per_epoch = steps_per_epoch)
+    steps_per_epoch = (len(train_dl) // gradient_accumulation_steps) + (
+                len(train_dl) % gradient_accumulation_steps != 0)
+    # scheduler = torch.optim.lr_scheduler.OneCycleLR(
+    #     optimizer,
+    #     max_lr=config["scheduler"]["max_lr"],
+    #     epochs=epochs,
+    #     steps_per_epoch=steps_per_epoch)
+
+    # Using new fixed OneCycleLR
+    scheduler = Wrap_OneCycleLR(
+        optimizer,
+        max_lr=config["scheduler"]["max_lr"],
+        epochs=epochs,
+        steps_per_epoch=steps_per_epoch)
 
     if rank == 0:
         print("Number of training utterances: ", len(train_ds))
@@ -144,51 +156,51 @@ def main(rank, world_size, config, resume, preload):
 
     trainer_class = initialize_module(config["trainer"]["path"], initialize=False)
     trainer = trainer_class(
-        dist = dist,
-        rank = rank,
-        n_gpus = world_size,
-        config = config,
-        resume = resume,
-        preload = preload,
-        epochs = epochs,
-        steps_per_epoch = steps_per_epoch,
-        model = model,
-        compute_metric = compute_metric,
-        processor = processor,
-        train_dl = train_dl,
-        val_dl = val_dl,
-        train_sampler = train_sampler,
-        val_sampler = val_sampler,
-        optimizer = optimizer,
-        scheduler = scheduler,
-        save_dir = save_dir,
-        log_dir = log_dir,
-        gradient_accumulation_steps = gradient_accumulation_steps,
-        use_amp = use_amp,
-        max_clip_grad_norm = max_clip_grad_norm
+        dist=dist,
+        rank=rank,
+        n_gpus=world_size,
+        config=config,
+        resume=resume,
+        preload=preload,
+        epochs=epochs,
+        steps_per_epoch=steps_per_epoch,
+        model=model,
+        compute_metric=compute_metric,
+        processor=processor,
+        train_dl=train_dl,
+        val_dl=val_dl,
+        train_sampler=train_sampler,
+        val_sampler=val_sampler,
+        optimizer=optimizer,
+        scheduler=scheduler,
+        save_dir=save_dir,
+        log_dir=log_dir,
+        gradient_accumulation_steps=gradient_accumulation_steps,
+        use_amp=use_amp,
+        max_clip_grad_norm=max_clip_grad_norm
     )
     trainer.train()
 
-
     cleanup()
 
+
 if __name__ == '__main__':
-    args = argparse.ArgumentParser(description='ASR TRAIN ARGS')
+    args = argparse.ArgumentParser(description='ASR2 TRAIN ARGS')
     args.add_argument('-c', '--config', required=True, type=str,
                       help='config file path (default: None)')
     args.add_argument('-r', '--resume', action="store_true",
                       help='path to latest checkpoint (default: None)')
     args.add_argument('-p', '--preload', default=None, type=str,
-                      help='Path to pretrained Model')            
-    
+                      help='Path to pretrained Model')
+
     args = args.parse_args()
     config = toml.load(args.config)
     n_gpus = len(config['meta']["device_ids"].split(','))
-    
+    print(f'n_gpus: {n_gpus}')
+
     mp.spawn(
         main,
-        args = (n_gpus, config, args.resume, args.preload),
-        nprocs = n_gpus,
-        join = True
+        args=(n_gpus, config, args.resume, args.preload),
+        nprocs=n_gpus,
+        join=True
     )
-
