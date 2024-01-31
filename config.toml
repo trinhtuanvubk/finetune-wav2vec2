@@ -1,12 +1,14 @@
 [meta]
 name = "ASR" 
+# pretrained_path = "facebook/wav2vec2-large-robust-ft-swbd-300h"
 pretrained_path = "facebook/wav2vec2-base-960h"
 seed = 42
-epochs = 20
-save_dir = "saved/" 
+epochs = 200
+save_dir = "saved/"
 gradient_accumulation_steps = 1
-use_amp = false # Whether to use Automatic Mixed Precision for speeding up - https://pytorch.org/docs/stable/amp.html
-device_ids = "1" # set the gpu devices on which you want to train your model
+use_amp = true # Whether to use Automatic Mixed Precision for speeding up - https://pytorch.org/docs/stable/amp.html
+# device_ids = "0,1" # set the gpu devices on which you want to train your model
+device_ids = "0" # set the gpu devices on which you want to train your model
 sr = 16000
 max_clip_grad_norm = 5.0 # torch.nn.utils.clip_grad_norm_
 
@@ -37,7 +39,7 @@ blocking = false # whether to wait until the model is uploaded (this will be ver
 [train_dataset]
 path = "base.base_dataset.BaseDataset"
     [train_dataset.args]
-    path = "./timit/transcript.txt"
+    path = "./data/train.txt"
     preload_data = false
     delimiter = "|"
     # Only train audio files that have duration in range [min_duration, max_duration]
@@ -46,7 +48,7 @@ path = "base.base_dataset.BaseDataset"
     nb_workers = 4
     
     [train_dataset.dataloader]
-    batch_size = 2
+    batch_size = 4
     num_workers = 4
     pin_memory = true 
     drop_last = true
@@ -59,7 +61,7 @@ path = "base.base_dataset.BaseDataset"
 [val_dataset]
 path = "base.base_dataset.BaseDataset"
     [val_dataset.args]
-    path = "./timit/transcript.txt"
+    path = "./data/test.txt"
     preload_data = false
     delimiter = "|"
     nb_workers = 4
@@ -84,5 +86,5 @@ max_lr = 1e-5
 [trainer]
 path = "trainer.trainer.Trainer"
     [trainer.args]
-    validation_interval = 500
-    save_max_metric_score = false 
+    validation_interval = 10
+    save_max_metric_score = false
